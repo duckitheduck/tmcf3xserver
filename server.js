@@ -5,22 +5,24 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 
-let latestMessage = null;
+let announcement = null;
 
 app.get("/", (req, res) => {
-    res.send("Roblox HTTP Server is running!");
+    res.send("Roblox Admin Server Online");
 });
 
-app.get("/message", (req, res) => {
+// Roblox polls this endpoint
+app.get("/announcement", (req, res) => {
     res.json({
-        message: latestMessage
+        message: announcement
     });
 
-    latestMessage = null;
+    announcement = null;
 });
 
-app.post("/message", (req, res) => {
-    latestMessage = req.body.message;
+// You send a message here
+app.post("/announcement", (req, res) => {
+    announcement = req.body.message;
 
     res.json({
         success: true
@@ -28,5 +30,5 @@ app.post("/message", (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`Listening on port ${PORT}`);
+    console.log("Listening on " + PORT);
 });
