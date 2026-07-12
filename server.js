@@ -1,115 +1,74 @@
-const express = require("express");
+function escapeHTML(str) {
+    return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
 
-const app = express();
-const PORT = process.env.PORT || 3000;
+const el = {
+    serverCount: document.getElementById("serverCount"),
+    playerCount: document.getElementById("playerCount"),
+    logCount: document.getElementById("logCount"),
+    servers: document.getElementById("servers"),
+    logs: document.getElementById("logs"),
+};
 
-app.use(express.json());
-app.use(express.static("public"));
+let updating = false;
 
-let announcement = null;
+async function update() {
+    if (updating) return; // avoid overlapping runs if a fetch is slow
+    updating = true;
+    try {
+        const [serverRes, logRes] = await Promise.all([
+            fetch("/servers"),
+            fetch("/logs"),
+        ]);
+        if (!serverRes.ok || !logRes.ok) throw new Error("Bad response");
 
-app.get("/", (req, res) => {
-    res.send("Roblox Admin Server Online");
-});
+        const servers = await serverRes.json();
+        const logs = await logRes.json();
 
-// Roblox polls this endpoint
-app.get("/announcement", (req, res) => {
-    res.json({
-        message: announcement
-    });
+        el.serverCount.innerText = servers.length;
 
-    announcement = null;
-});
-
-// You send a message here
-app.post("/announcement", (req, res) => {
-    announcement = req.body.message;
-
-    res.json({
-        success: true
-    });
-});
-
-app.listen(PORT, () => {
-    console.log("Listening on " + PORT);
-});
-
-async function update(){
-
-    let servers=await fetch("/servers");
-    servers=await servers.json();
-
-    let logs=await fetch("/logs");
-    logs=await logs.json();
-
-    document.getElementById("serverCount").innerText=servers.length;
-
-    let players=0;
-
-    document.getElementById("servers").innerHTML="";
-
-    servers.forEach(server=>{
-
-        players+=server.players.length;
-
-        let html=`
-
+        let players = 0;
+        const serverHtml = servers.map(server => {
+            players += server.players.length;
+            const playerHtml = server.players
+                .map(player => `<div class="player">${escapeHTML(player)}</div>`)
+                .join("");
+            return `
 <div class="server">
-
 <b>JobId</b><br>
-
-${server.jobId}
-
+${escapeHTML(server.jobId)}
 <br><br>
-
 <b>Players (${server.players.length})</b><br>
+${playerHtml}
+</div>`;
+        }).join("");
+        el.servers.innerHTML = serverHtml;
 
-`;
+        el.playerCount.innerText = players;
+        el.logCount.innerText = logs.length;
 
-        server.players.forEach(player=>{
-
-            html+=`<div class="player">${player}</div>`;
-
-        });
-
-        html+="</div>";
-
-        document.getElementById("servers").innerHTML+=html;
-
-    });
-
-    document.getElementById("playerCount").innerText=players;
-
-    document.getElementById("logCount").innerText=logs.length;
-
-    document.getElementById("logs").innerHTML="";
-
-    logs.forEach(log=>{
-
-        document.getElementById("logs").innerHTML+=`
-
+        const logHtml = logs.map(log => `
 <div class="log">
-
-<b>${log.type}</b>
-
-(${log.server})
-
+<b>${escapeHTML(log.type)}</b>
+(${escapeHTML(log.server)})
 <br>
-
-${log.text}
-
+${escapeHTML(log.text)}
 <br>
+<small>${escapeHTML(log.time)}</small>
+</div>`).join("");
+        el.logs.innerHTML = logHtml;
 
-<small>${log.time}</small>
-
-</div>
-
-`;
-
-    });
-
+    } catch (err) {
+        console.error("update() failed:", err);
+    } finally {
+        updating = false;
+    }
 }
 
 update();
-
-setInterval(update,1000);
+setInterval(update, 1000);
