@@ -1,36 +1,31 @@
 <!DOCTYPE html>
 <html>
+<head>
+    <link rel="stylesheet" href="style.css">
+</head>
 <body>
 <h1> ducki's http message sender</h1>
 
-<input id="msg">
+<div class="container">
+    <input id="msg" placeholder="enter msg here...">
 
-<button onclick="send()">
-Send
-</button>
+    <button onclick="send()">
+        Send
+    </button>
+</div>
 
 <script>
-
-async function send(){
-
-    await fetch("/announcement",{
-
-        method:"POST",
-
-        headers:{
-            "Content-Type":"application/json"
+async function send() {
+    await fetch("/announcement", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
         },
-
-        body:JSON.stringify({
-
-            message:document.getElementById("msg").value
-
+        body: JSON.stringify({
+            message: document.getElementById("msg").value
         })
-
     });
-
 }
-
 </script>
 
 </body>
