@@ -1,1 +1,12 @@
-
+{
+  "name": "tmcf3xserver",
+  "version": "1.0.0",
+  "description": "ducki's tmcf3x remote message sender ^_^",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
