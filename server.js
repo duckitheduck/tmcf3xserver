@@ -64,3 +64,18 @@ app.post("/server/leave", authenticate, (req, res) => {
 app.post("/server/chat", authenticate, (req, res) => {
     // ...
 });
+
+let pendingMessage = null;
+
+app.post("/announcement", (req, res) => {
+    pendingMessage = req.body.message;
+    res.json({ success: true });
+});
+
+app.get("/announcement", (req, res) => {
+    res.json({
+        message: pendingMessage
+    });
+
+    pendingMessage = null;
+});
