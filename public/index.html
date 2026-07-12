@@ -1,36 +1,9 @@
 <!DOCTYPE html>
 <html>
+<head>
+    <title>Test</title>
+</head>
 <body>
-
-<input id="msg">
-
-<button onclick="send()">
-Send
-</button>
-
-<script>
-
-async function send(){
-
-    await fetch("/announcement",{
-
-        method:"POST",
-
-        headers:{
-            "Content-Type":"application/json"
-        },
-
-        body:JSON.stringify({
-
-            message:document.getElementById("msg").value
-
-        })
-
-    });
-
-}
-
-</script>
-
+    <h1>Hello from Railway!</h1>
 </body>
 </html>
