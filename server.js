@@ -1,81 +1,34 @@
 const express = require("express");
 
 const app = express();
+const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
-app.use(express.static("public"));
 
-const servers = {};
+let announcement = null;
 
-app.post("/server/start", (req, res) => {
-    const { jobId, placeId } = req.body;
-
-    servers[jobId] = {
-        placeId,
-        players: []
-    };
-
-    res.json({ success: true });
+app.get("/", (req, res) => {
+    res.send("Roblox Admin Server Online");
 });
 
-app.post("/player/join", (req, res) => {
-    const { jobId, player } = req.body;
-
-    if (servers[jobId]) {
-        servers[jobId].players.push(player);
-    }
-
-    res.json({ success: true });
-});
-
-app.post("/player/leave", (req, res) => {
-    const { jobId, player } = req.body;
-
-    if (servers[jobId]) {
-        servers[jobId].players =
-            servers[jobId].players.filter(p => p !== player);
-    }
-
-    res.json({ success: true });
-});
-
-const API_KEY = process.env.API_KEY;
-
-function authenticate(req, res, next) {
-    if (req.headers["x-api-key"] !== API_KEY) {
-        return res.status(401).json({ error: "Unauthorized" });
-    }
-
-    next();
-}
-
-app.post("/server/start", authenticate, (req, res) => {
-    // ...
-});
-
-app.post("/server/join", authenticate, (req, res) => {
-    // ...
-});
-
-app.post("/server/leave", authenticate, (req, res) => {
-    // ...
-});
-
-app.post("/server/chat", authenticate, (req, res) => {
-    // ...
-});
-
-let pendingMessage = null;
-
-app.post("/announcement", (req, res) => {
-    pendingMessage = req.body.message;
-    res.json({ success: true });
-});
-
+// Roblox polls this endpoint
 app.get("/announcement", (req, res) => {
     res.json({
-        message: pendingMessage
+        message: announcement
     });
 
-    pendingMessage = null;
+    announcement = null;
+});
+
+// You send a message here
+app.post("/announcement", (req, res) => {
+    announcement = req.body.message;
+
+    res.json({
+        success: true
+    });
+});
+
+app.listen(PORT, () => {
+    console.log("Listening on " + PORT);
 });
