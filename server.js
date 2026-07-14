@@ -9,7 +9,7 @@ app.use(express.static("public"));
 let announcement = null;
 
 app.get("/", (req, res) => {
-    res.send("Roblox Admin Server Online");
+    res.send("roblox message http script online");
 });
 
 // Roblox polls this endpoint
