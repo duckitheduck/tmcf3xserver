@@ -37,7 +37,7 @@ async function send(){
 
     try{
 
-        const response=await fetch("/announcement",{
+        await fetch("/announcement",{
 
             method:"POST",
 
@@ -50,12 +50,6 @@ async function send(){
             })
 
         });
-
-        const data=await response.json();
-
-        if(data.success){
-            document.getElementById("msg").value="";
-        }
 
     }catch(error){
 
