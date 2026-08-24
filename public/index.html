@@ -5,33 +5,123 @@
 <title>tmcf3x messager</title>
 
 <link rel="stylesheet" href="style.css">
+
 </head>
+
 <body>
-<h2> ducki's http message sender</h2>
 
-    
+<h2>ducki's http message sender</h2>
 
-    
 <div class="container">
-    <input id="msg" placeholder="enter msg here...">
+
+    <input
+        id="msg"
+        placeholder="enter msg here..."
+    >
+
+    <select id="target">
+        <option value="all">All Servers</option>
+        <option value="specific">Specific Server</option>
+    </select>
+
+    <input
+        id="jobId"
+        placeholder="enter server JobId..."
+        style="display:none;"
+    >
 
     <button onclick="send()">
         Send
     </button>
+
+    <p id="status"></p>
+
 </div>
 
 <script>
-async function send() {
-    await fetch("/announcement", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-            message: document.getElementById("msg").value
-        })
-    });
+
+const target=document.getElementById("target");
+const jobId=document.getElementById("jobId");
+const status=document.getElementById("status");
+
+target.addEventListener("change",()=>{
+
+    if(target.value==="specific"){
+        jobId.style.display="block";
+    }else{
+        jobId.style.display="none";
+        jobId.value="";
+    }
+
+});
+
+async function send(){
+
+    const message=document.getElementById("msg").value.trim();
+
+    if(!message){
+        status.textContent="Enter a message first.";
+        return;
+    }
+
+    let targetServer="all";
+
+    if(target.value==="specific"){
+
+        targetServer=jobId.value.trim();
+
+        if(!targetServer){
+            status.textContent="Enter a JobId.";
+            return;
+        }
+
+    }
+
+    status.textContent="Sending...";
+
+    try{
+
+        const response=await fetch("/announcement",{
+            method:"POST",
+
+            headers:{
+                "Content-Type":"application/json"
+            },
+
+            body:JSON.stringify({
+                message:message,
+                targetServer:targetServer
+            })
+
+        });
+
+        const data=await response.json();
+
+        if(data.success){
+
+            status.textContent=
+                `Sent! Message #${data.id} → ${targetServer}`;
+
+            document.getElementById("msg").value="";
+
+        }else{
+
+            status.textContent=
+                data.error||"Failed to send message.";
+
+        }
+
+    }catch(error){
+
+        console.error(error);
+
+        status.textContent=
+            "Could not connect to the server.";
+
+    }
+
 }
+
 </script>
 
 </body>
