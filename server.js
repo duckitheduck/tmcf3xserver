@@ -3,12 +3,14 @@ const cors=require("cors");
 const {Pool}=require("pg");
 
 const app=express();
+
 const PORT=process.env.PORT||3000;
 
 app.use(cors());
 app.use(express.json());
 app.use(express.static("public"));
 
+// PostgreSQL
 const pool=new Pool({
     connectionString:process.env.DATABASE_URL,
     ssl:{
@@ -16,50 +18,19 @@ const pool=new Pool({
     }
 });
 
-// Settings
+// Maximum number of messages
 const MAX_MESSAGES=1000;
-const RETRY_SECONDS=30;
 
-// Create / update database
+
+// Create database table
 async function setupDatabase(){
 
     await pool.query(`
         CREATE TABLE IF NOT EXISTS announcements(
             id SERIAL PRIMARY KEY,
             message TEXT NOT NULL,
-            target_server TEXT,
-            status TEXT NOT NULL DEFAULT 'pending',
-            attempts INTEGER NOT NULL DEFAULT 0,
-            locked_until TIMESTAMP NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            delivered_at TIMESTAMP NULL
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
-    `);
-
-    // Add columns if you already had the old announcements table
-    await pool.query(`
-        ALTER TABLE announcements
-        ADD COLUMN IF NOT EXISTS target_server TEXT
-    `);
-
-    await pool.query(`
-        ALTER TABLE announcements
-        ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'pending'
-    `);
-
-    await pool.query(`
-        ALTER TABLE announcements
-        ADD COLUMN IF NOT EXISTS attempts INTEGER NOT NULL DEFAULT 0
-    `);
-
-    await pool.query(`
-        ALTER TABLE announcements
-        ADD COLUMN IF NOT EXISTS locked_until TIMESTAMP NULL
-    `);
-
-    await pool.query(`
-        ALTER TABLE announcements
-        ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMP NULL
     `);
 
     console.log("Database ready");
@@ -72,95 +43,35 @@ app.get("/",(req,res)=>{
 });
 
 
-// ============================================================
-// ROBLOX GETS A MESSAGE
-// ============================================================
-
+// Roblox polls this endpoint
 app.get("/announcement",async(req,res)=>{
-
-    const jobId=req.query.jobId;
-
-    if(!jobId){
-        return res.status(400).json({
-            success:false,
-            error:"jobId is required"
-        });
-    }
 
     try{
 
-        /*
-            Find the oldest message that:
-
-            1. Is pending
-            OR
-            2. Was being processed but the retry timer expired
-
-            AND
-
-            3. Is targeted to this server
-            OR
-            4. Is targeted to "all"
-        */
-
+        // Get the oldest message
         const result=await pool.query(`
-            WITH next_message AS(
+            DELETE FROM announcements
+            WHERE id=(
                 SELECT id
                 FROM announcements
-                WHERE
-                    (
-                        status='pending'
-                        OR
-                        (
-                            status='processing'
-                            AND locked_until IS NOT NULL
-                            AND locked_until<NOW()
-                        )
-                    )
-                    AND
-                    (
-                        target_server IS NULL
-                        OR
-                        target_server='all'
-                        OR
-                        target_server=$1
-                    )
                 ORDER BY id ASC
                 LIMIT 1
-                FOR UPDATE SKIP LOCKED
             )
+            RETURNING message
+        `);
 
-            UPDATE announcements
-            SET
-                status='processing',
-                attempts=attempts+1,
-                locked_until=NOW()+($2 * INTERVAL '1 second')
-            WHERE id IN(
-                SELECT id FROM next_message
-            )
-            RETURNING id,message,target_server,attempts
-        `,[jobId,RETRY_SECONDS]);
+        const message=
+            result.rows.length>0
+            ?result.rows[0].message
+            :null;
 
-        if(result.rows.length===0){
-
-            return res.json({
-                message:null
-            });
-
-        }
-
-        const row=result.rows[0];
-
-        console.log(
-            `Sending message #${row.id} to ${row.target_server||"all"} `+
-            `(server: ${jobId}, attempt: ${row.attempts})`
-        );
+        const countResult=await pool.query(`
+            SELECT COUNT(*) FROM announcements
+        `);
 
         res.json({
-            id:row.id,
-            message:row.message,
-            targetServer:row.target_server||"all",
-            attempt:row.attempts
+            message:message,
+            messagesLeft:Number(countResult.rows[0].count)
         });
 
     }catch(err){
@@ -177,25 +88,10 @@ app.get("/announcement",async(req,res)=>{
 });
 
 
-// ============================================================
-// WEBSITE CREATES A MESSAGE
-// ============================================================
-
+// Website sends a message
 app.post("/announcement",async(req,res)=>{
 
     const message=req.body?.message;
-
-    /*
-        targetServer can be:
-
-        "all"
-        OR
-        a Roblox JobId
-
-        If omitted, defaults to "all".
-    */
-
-    const targetServer=req.body?.targetServer||"all";
 
     if(
         typeof message!=="string"||
@@ -209,53 +105,38 @@ app.post("/announcement",async(req,res)=>{
 
     }
 
-    if(typeof targetServer!=="string"){
-
-        return res.status(400).json({
-            success:false,
-            error:"targetServer must be a string"
-        });
-
-    }
-
     try{
 
         const result=await pool.query(`
-            INSERT INTO announcements(
-                message,
-                target_server
-            )
-            VALUES($1,$2)
+            INSERT INTO announcements(message)
+            VALUES($1)
             RETURNING id
-        `,[
-            message.trim(),
-            targetServer.trim()
-        ]);
+        `,[message.trim()]);
 
-        // Keep database from growing forever
+        // Keep only the newest MAX_MESSAGES
         await pool.query(`
             DELETE FROM announcements
             WHERE id IN(
                 SELECT id
                 FROM announcements
-                WHERE status='delivered'
                 ORDER BY id ASC
-                LIMIT GREATEST(
-                    (SELECT COUNT(*) FROM announcements)-$1,
-                    0
-                )
+                OFFSET $1
             )
         `,[MAX_MESSAGES]);
 
-        console.log(
-            `Announcement #${result.rows[0].id} received `+
-            `(target: ${targetServer})`
-        );
+        const countResult=await pool.query(`
+            SELECT COUNT(*) FROM announcements
+        `);
+
+        const count=Number(countResult.rows[0].count);
+
+        console.log("Announcement received:",message);
+        console.log("Messages waiting:",count);
 
         res.json({
             success:true,
             id:result.rows[0].id,
-            targetServer:targetServer
+            messagesWaiting:count
         });
 
     }catch(err){
@@ -272,83 +153,7 @@ app.post("/announcement",async(req,res)=>{
 });
 
 
-// ============================================================
-// ROBLOX ACKNOWLEDGES MESSAGE
-// ============================================================
-
-app.post("/announcement/ack",async(req,res)=>{
-
-    const id=req.body?.id;
-    const jobId=req.body?.jobId;
-
-    if(!id||!jobId){
-
-        return res.status(400).json({
-            success:false,
-            error:"id and jobId are required"
-        });
-
-    }
-
-    try{
-
-        const result=await pool.query(`
-            UPDATE announcements
-            SET
-                status='delivered',
-                locked_until=NULL,
-                delivered_at=NOW()
-            WHERE
-                id=$1
-                AND
-                status='processing'
-                AND
-                (
-                    target_server IS NULL
-                    OR
-                    target_server='all'
-                    OR
-                    target_server=$2
-                )
-            RETURNING id
-        `,[id,jobId]);
-
-        if(result.rows.length===0){
-
-            return res.status(404).json({
-                success:false,
-                error:"Message not found or already acknowledged"
-            });
-
-        }
-
-        console.log(
-            `Announcement #${id} acknowledged by ${jobId}`
-        );
-
-        res.json({
-            success:true,
-            id:id
-        });
-
-    }catch(err){
-
-        console.error("Error acknowledging message:",err);
-
-        res.status(500).json({
-            success:false,
-            error:"Database error"
-        });
-
-    }
-
-});
-
-
-// ============================================================
-// VIEW MESSAGE QUEUE
-// ============================================================
-
+// View queued messages
 app.get("/messages",async(req,res)=>{
 
     try{
@@ -357,12 +162,7 @@ app.get("/messages",async(req,res)=>{
             SELECT
                 id,
                 message,
-                target_server,
-                status,
-                attempts,
-                locked_until,
-                created_at,
-                delivered_at
+                created_at
             FROM announcements
             ORDER BY id ASC
         `);
@@ -386,10 +186,7 @@ app.get("/messages",async(req,res)=>{
 });
 
 
-// ============================================================
-// CLEAR MESSAGE QUEUE
-// ============================================================
-
+// Clear the queue
 app.delete("/messages",async(req,res)=>{
 
     try{
@@ -418,19 +215,13 @@ app.delete("/messages",async(req,res)=>{
 });
 
 
-// ============================================================
-// TEST ROUTE
-// ============================================================
-
+// Test route
 app.get("/test",(req,res)=>{
     res.send("Test route works");
 });
 
 
-// ============================================================
-// START SERVER
-// ============================================================
-
+// Start server
 setupDatabase()
     .then(()=>{
 
