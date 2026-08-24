@@ -23,8 +23,6 @@
         Send
     </button>
 
-    <p id="status"></p>
-
 </div>
 
 <script>
@@ -32,16 +30,10 @@
 async function send(){
 
     const message=document.getElementById("msg").value.trim();
-    const status=document.getElementById("status");
 
     if(!message){
-
-        status.textContent="Enter a message first.";
-
         return;
     }
-
-    status.textContent="Sending...";
 
     try{
 
@@ -62,25 +54,12 @@ async function send(){
         const data=await response.json();
 
         if(data.success){
-
-            status.textContent=
-                `Sent! Message #${data.id} | ${data.messagesWaiting} waiting`;
-
             document.getElementById("msg").value="";
-
-        }else{
-
-            status.textContent=
-                data.error||"Failed to send message.";
-
         }
 
     }catch(error){
 
         console.error(error);
-
-        status.textContent=
-            "Could not connect to the server.";
 
     }
 
