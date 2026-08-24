@@ -10,7 +10,6 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static("public"));
 
-// PostgreSQL
 const pool=new Pool({
     connectionString:process.env.DATABASE_URL,
     ssl:{
@@ -18,7 +17,6 @@ const pool=new Pool({
     }
 });
 
-// Maximum number of messages
 const MAX_MESSAGES=1000;
 
 
@@ -48,7 +46,6 @@ app.get("/announcement",async(req,res)=>{
 
     try{
 
-        // Get the oldest message
         const result=await pool.query(`
             DELETE FROM announcements
             WHERE id=(
@@ -186,7 +183,7 @@ app.get("/messages",async(req,res)=>{
 });
 
 
-// Clear the queue
+// Clear queue
 app.delete("/messages",async(req,res)=>{
 
     try{
